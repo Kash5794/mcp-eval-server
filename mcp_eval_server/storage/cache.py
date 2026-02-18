@@ -50,13 +50,28 @@ class EvaluationCache:
                 
                 self.disk_cache = dc.Cache(str(cache_path))
             except (OSError, PermissionError, RuntimeError) as e:
-                # Log warning but continue with memory-only cache
+                # Try fallback to /tmp directory (writable in Lambda/container environments)
                 import logging
-                logging.warning(
-                    f"Could not initialize disk cache at {disk_cache_dir}: {e}. "
-                    f"Falling back to memory-only cache."
-                )
-                self.disk_cache = None
+                try:
+                    fallback_path = Path("/tmp/mcp_eval_cache")
+                    fallback_path.mkdir(parents=True, exist_ok=True)
+                    
+                    if os.access(fallback_path, os.W_OK):
+                        logging.warning(
+                            f"Could not initialize disk cache at {disk_cache_dir}: {e}. "
+                            f"Using fallback directory {fallback_path}."
+                        )
+                        self.disk_cache = dc.Cache(str(fallback_path))
+                    else:
+                        raise RuntimeError(f"Fallback directory {fallback_path} is not writable")
+                except Exception as fallback_error:
+                    # If fallback also fails, continue with memory-only cache
+                    logging.warning(
+                        f"Could not initialize disk cache at {disk_cache_dir}: {e}. "
+                        f"Fallback to /tmp also failed: {fallback_error}. "
+                        f"Using memory-only cache."
+                    )
+                    self.disk_cache = None
         else:
             self.disk_cache = None
 

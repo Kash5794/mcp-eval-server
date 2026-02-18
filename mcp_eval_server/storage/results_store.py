@@ -30,10 +30,17 @@ class ResultsStore:
         try:
             self.db_path.parent.mkdir(parents=True, exist_ok=True)
         except (OSError, PermissionError) as e:
-            raise RuntimeError(
+            # If directory creation fails (e.g., read-only filesystem in Lambda),
+            # fall back to /tmp directory
+            import logging
+            logging.warning(
                 f"Cannot create database directory {self.db_path.parent}: {e}. "
-                f"Ensure the directory exists and is writable."
-            ) from e
+                f"Falling back to /tmp directory."
+            )
+            # Use /tmp which is writable in Lambda/container environments
+            fallback_path = Path("/tmp") / self.db_path.name
+            self.db_path = fallback_path.resolve()
+            self.db_path.parent.mkdir(parents=True, exist_ok=True)
         
         # Verify directory is writable
         if not os.access(self.db_path.parent, os.W_OK):
