@@ -29,22 +29,22 @@ except ImportError:
 from fastmcp import FastMCP
 
 # Local
-from .health import mark_judge_tools_ready, mark_ready, mark_storage_ready, start_health_server, stop_health_server
-from .storage.cache import BenchmarkCache, EvaluationCache, JudgeResponseCache
-from .storage.results_store import ResultsStore
-from .tools.agent_tools import AgentTools
-from .tools.bias_tools import BiasTools
-from .tools.calibration_tools import CalibrationTools
-from .tools.judge_tools import JudgeTools
-from .tools.multilingual_tools import MultilingualTools
-from .tools.performance_tools import PerformanceTools
-from .tools.privacy_tools import PrivacyTools
-from .tools.prompt_tools import PromptTools
-from .tools.quality_tools import QualityTools
-from .tools.rag_tools import RAGTools
-from .tools.robustness_tools import RobustnessTools
-from .tools.safety_tools import SafetyTools
-from .tools.workflow_tools import WorkflowTools
+from mcp_eval_server.health import mark_judge_tools_ready, mark_ready, mark_storage_ready, start_health_server, stop_health_server
+from mcp_eval_server.storage.cache import BenchmarkCache, EvaluationCache, JudgeResponseCache
+from mcp_eval_server.storage.results_store import ResultsStore
+from mcp_eval_server.tools.agent_tools import AgentTools
+from mcp_eval_server.tools.bias_tools import BiasTools
+from mcp_eval_server.tools.calibration_tools import CalibrationTools
+from mcp_eval_server.tools.judge_tools import JudgeTools
+from mcp_eval_server.tools.multilingual_tools import MultilingualTools
+from mcp_eval_server.tools.performance_tools import PerformanceTools
+from mcp_eval_server.tools.privacy_tools import PrivacyTools
+from mcp_eval_server.tools.prompt_tools import PromptTools
+from mcp_eval_server.tools.quality_tools import QualityTools
+from mcp_eval_server.tools.rag_tools import RAGTools
+from mcp_eval_server.tools.robustness_tools import RobustnessTools
+from mcp_eval_server.tools.safety_tools import SafetyTools
+from mcp_eval_server.tools.workflow_tools import WorkflowTools
 
 # Set up logging
 logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(name)s - %(levelname)s - %(message)s", datefmt="%Y-%m-%d %H:%M:%S")
