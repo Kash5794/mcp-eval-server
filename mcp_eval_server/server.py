@@ -85,10 +85,15 @@ async def lifespan_handler(app):
     CALIBRATION_TOOLS = CalibrationTools(JUDGE_TOOLS)
 
     # Initialize caching and storage
-    EVALUATION_CACHE = EvaluationCache()
-    JUDGE_CACHE = JudgeResponseCache()
-    BENCHMARK_CACHE = BenchmarkCache()
-    RESULTS_STORE = ResultsStore()
+    # Use environment variable for cache directory, with fallback to None (memory-only)
+    cache_dir = os.getenv("MCP_EVAL_CACHE_DIR")
+    EVALUATION_CACHE = EvaluationCache(disk_cache_dir=cache_dir)
+    JUDGE_CACHE = JudgeResponseCache(disk_cache_dir=cache_dir)
+    BENCHMARK_CACHE = BenchmarkCache(disk_cache_dir=cache_dir)
+    
+    # Use environment variable for results DB path, with fallback
+    results_db_path = os.getenv("MCP_EVAL_RESULTS_DB", "evaluation_results.db")
+    RESULTS_STORE = ResultsStore(db_path=results_db_path)
 
     # Mark storage as ready
     mark_storage_ready()

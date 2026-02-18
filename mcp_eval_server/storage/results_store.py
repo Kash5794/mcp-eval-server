@@ -8,6 +8,7 @@ Results storage system for MCP Eval Server.
 """
 
 # Standard
+import os
 from pathlib import Path
 import sqlite3
 from typing import Any, Dict, List, Optional
@@ -23,8 +24,24 @@ class ResultsStore:
         Args:
             db_path: Path to SQLite database file
         """
-        self.db_path = Path(db_path)
-        self.db_path.parent.mkdir(parents=True, exist_ok=True)
+        self.db_path = Path(db_path).resolve()
+        
+        # Ensure parent directory exists and is writable
+        try:
+            self.db_path.parent.mkdir(parents=True, exist_ok=True)
+        except (OSError, PermissionError) as e:
+            raise RuntimeError(
+                f"Cannot create database directory {self.db_path.parent}: {e}. "
+                f"Ensure the directory exists and is writable."
+            ) from e
+        
+        # Verify directory is writable
+        if not os.access(self.db_path.parent, os.W_OK):
+            raise RuntimeError(
+                f"Database directory {self.db_path.parent} is not writable. "
+                f"Check directory permissions."
+            )
+        
         self._init_database()
 
     def _init_database(self):
