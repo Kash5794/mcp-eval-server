@@ -11,6 +11,7 @@ MCP Evaluation Server - Main entry point using FastMCP.
 import asyncio
 import logging
 import os
+from contextlib import asynccontextmanager
 from typing import Any, Dict
 
 import orjson
@@ -49,8 +50,229 @@ from .tools.workflow_tools import WorkflowTools
 logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(name)s - %(levelname)s - %(message)s", datefmt="%Y-%m-%d %H:%M:%S")
 logger = logging.getLogger(__name__)
 
-# Initialize FastMCP server
-mcp = FastMCP("mcp-eval-server")
+
+# Lifespan context manager (defined before FastMCP initialization)
+@asynccontextmanager
+async def lifespan_handler(app):
+    """Lifespan context manager for startup and shutdown."""
+    global JUDGE_TOOLS, PROMPT_TOOLS, AGENT_TOOLS, QUALITY_TOOLS, RAG_TOOLS, BIAS_TOOLS, ROBUSTNESS_TOOLS, SAFETY_TOOLS, MULTILINGUAL_TOOLS, PERFORMANCE_TOOLS, PRIVACY_TOOLS, WORKFLOW_TOOLS, CALIBRATION_TOOLS  # pylint: disable=global-statement
+    global EVALUATION_CACHE, JUDGE_CACHE, BENCHMARK_CACHE, RESULTS_STORE, HEALTH_SERVER  # pylint: disable=global-statement
+
+    logger.info("🚀 Starting MCP Evaluation Server...")
+    logger.info("📡 Protocol: Model Context Protocol (MCP) via FastMCP")
+    logger.info("📋 Server: mcp-eval-server v0.1.0")
+
+    # Initialize tools and storage after environment variables are loaded
+    logger.info("🔧 Initializing tools and storage...")
+
+    # Support custom configuration paths
+    models_config_path = os.getenv("MCP_EVAL_MODELS_CONFIG")
+    if models_config_path:
+        logger.info(f"📄 Using custom models config: {models_config_path}")
+
+    JUDGE_TOOLS = JudgeTools(config_path=models_config_path)
+    PROMPT_TOOLS = PromptTools(JUDGE_TOOLS)
+    AGENT_TOOLS = AgentTools(JUDGE_TOOLS)
+    QUALITY_TOOLS = QualityTools(JUDGE_TOOLS)
+    RAG_TOOLS = RAGTools(JUDGE_TOOLS)
+    BIAS_TOOLS = BiasTools(JUDGE_TOOLS)
+    ROBUSTNESS_TOOLS = RobustnessTools(JUDGE_TOOLS)
+    SAFETY_TOOLS = SafetyTools(JUDGE_TOOLS)
+    MULTILINGUAL_TOOLS = MultilingualTools(JUDGE_TOOLS)
+    PERFORMANCE_TOOLS = PerformanceTools(JUDGE_TOOLS)
+    PRIVACY_TOOLS = PrivacyTools(JUDGE_TOOLS)
+    WORKFLOW_TOOLS = WorkflowTools(JUDGE_TOOLS, PROMPT_TOOLS, AGENT_TOOLS, QUALITY_TOOLS)
+    CALIBRATION_TOOLS = CalibrationTools(JUDGE_TOOLS)
+
+    # Initialize caching and storage
+    EVALUATION_CACHE = EvaluationCache()
+    JUDGE_CACHE = JudgeResponseCache()
+    BENCHMARK_CACHE = BenchmarkCache()
+    RESULTS_STORE = ResultsStore()
+
+    # Mark storage as ready
+    mark_storage_ready()
+
+    # Log environment configuration
+    logger.info("🔧 Environment Configuration:")
+    env_vars = {
+        "OPENAI_API_KEY": bool(os.getenv("OPENAI_API_KEY")),
+        "AZURE_OPENAI_API_KEY": bool(os.getenv("AZURE_OPENAI_API_KEY")),
+        "AZURE_OPENAI_ENDPOINT": os.getenv("AZURE_OPENAI_ENDPOINT", "not set"),
+        "AZURE_DEPLOYMENT_NAME": os.getenv("AZURE_DEPLOYMENT_NAME", "not set"),
+        "ANTHROPIC_API_KEY": bool(os.getenv("ANTHROPIC_API_KEY")),
+        "AWS_ACCESS_KEY_ID": bool(os.getenv("AWS_ACCESS_KEY_ID")),
+        "GOOGLE_API_KEY": bool(os.getenv("GOOGLE_API_KEY")),
+        "WATSONX_API_KEY": bool(os.getenv("WATSONX_API_KEY")),
+        "WATSONX_PROJECT_ID": os.getenv("WATSONX_PROJECT_ID", "not set"),
+        "OLLAMA_BASE_URL": os.getenv("OLLAMA_BASE_URL", "not set"),
+        "DEFAULT_JUDGE_MODEL": os.getenv("DEFAULT_JUDGE_MODEL", "not set"),
+    }
+    for var, value in env_vars.items():
+        if var in ["AZURE_OPENAI_ENDPOINT", "AZURE_DEPLOYMENT_NAME", "WATSONX_PROJECT_ID", "OLLAMA_BASE_URL", "DEFAULT_JUDGE_MODEL"]:
+            logger.info(f"   📊 {var}: {value}")
+        else:
+            status = "✅" if value else "❌"
+            logger.info(f"   {status} {var}: {'configured' if value else 'not set'}")
+
+    # Log judge initialization and test connectivity
+    available_judges = JUDGE_TOOLS.get_available_judges()
+    logger.info(f"⚖️  Loaded {len(available_judges)} judge models: {available_judges}")
+
+    # Test judge connectivity and log detailed status with endpoints
+    for judge_name in available_judges:
+        info = JUDGE_TOOLS.get_judge_info(judge_name)
+        provider = info.get("provider", "unknown")
+        model_name = info.get("model_name", "N/A")
+
+        # Get detailed configuration for each judge
+        judge_instance = JUDGE_TOOLS.judges.get(judge_name)
+        endpoint_info = ""
+
+        if provider == "openai" and hasattr(judge_instance, "client"):
+            base_url = str(judge_instance.client.base_url) if judge_instance.client.base_url else "https://api.openai.com/v1"
+            endpoint_info = f" → {base_url}"
+        elif provider == "azure":
+            endpoint = os.getenv("AZURE_OPENAI_ENDPOINT", "not configured")
+            deployment = os.getenv("AZURE_DEPLOYMENT_NAME", "not configured")
+            endpoint_info = f" → {endpoint} (deployment: {deployment})"
+        elif provider == "anthropic":
+            endpoint_info = " → https://api.anthropic.com"
+        elif provider == "ollama":
+            base_url = os.getenv("OLLAMA_BASE_URL", "http://localhost:11434")
+            # Test OLLAMA connectivity for status display
+            try:
+                # Third-Party
+                import aiohttp  # pylint: disable=import-outside-toplevel
+
+                async def test_ollama(test_url, aiohttp_module):  # pylint: disable=redefined-outer-name
+                    try:
+                        timeout = aiohttp_module.ClientTimeout(total=2)
+                        async with aiohttp_module.ClientSession(timeout=timeout) as session:
+                            async with session.get(f"{test_url}/api/tags") as response:
+                                return response.status == 200
+                    except Exception:
+                        return False
+
+                is_connected = await test_ollama(base_url, aiohttp)
+                status = "🟢 connected" if is_connected else "🔴 not reachable"
+                endpoint_info = f" → {base_url} ({status})"
+            except Exception:
+                endpoint_info = f" → {base_url} (🔴 not reachable)"
+        elif provider == "bedrock":
+            region = os.getenv("AWS_REGION", "us-east-1")
+            endpoint_info = f" → AWS Bedrock ({region})"
+        elif provider == "gemini":
+            endpoint_info = " → Google AI Studio"
+        elif provider == "watsonx":
+            watsonx_url = os.getenv("WATSONX_URL", "https://us-south.ml.cloud.ibm.com")
+            project_id = os.getenv("WATSONX_PROJECT_ID", "not configured")
+            endpoint_info = f" → {watsonx_url} (project: {project_id})"
+
+        logger.info(f"   📊 {judge_name} ({provider}): {model_name}{endpoint_info}")
+
+    # Log tool categories
+    logger.info("🛠️  Tool categories:")
+    logger.info("   • 4 Judge tools (evaluate, compare, rank, reference)")
+    logger.info("   • 4 Prompt tools (clarity, consistency, completeness, relevance)")
+    logger.info("   • 4 Agent tools (tool usage, task completion, reasoning, benchmarks)")
+    logger.info("   • 3 Quality tools (factuality, coherence, toxicity)")
+    logger.info("   • 8 RAG tools (retrieval, context, grounding, hallucination, coverage, citations, chunks, benchmarks)")
+    logger.info("   • 6 Bias & Fairness tools (demographic, representation, equity, cultural, linguistic, intersectional)")
+    logger.info("   • 5 Robustness tools (adversarial, sensitivity, injection, distribution, consistency)")
+    logger.info("   • 4 Safety & Alignment tools (harmful content, instruction following, refusal, value alignment)")
+    logger.info("   • 4 Multilingual tools (translation quality, cross-lingual consistency, cultural adaptation, language mixing)")
+    logger.info("   • 4 Performance tools (latency, efficiency, throughput, memory)")
+    logger.info("   • 8 Privacy tools (PII detection, data minimization, consent compliance, anonymization, leakage detection)")
+    logger.info("   • 3 Workflow tools (suites, execution, comparison)")
+    logger.info("   • 2 Calibration tools (agreement, optimization)")
+    logger.info("   • 4 Server tools (management, statistics, health)")
+
+    # Test primary judge with a simple evaluation if available
+    primary_judge = os.getenv("DEFAULT_JUDGE_MODEL", "gpt-4o-mini")
+    logger.info(f"🎯 Primary judge selection: {primary_judge}")
+
+    if primary_judge in available_judges:
+        try:
+            logger.info(f"🧪 Testing primary judge: {primary_judge}")
+
+            # Perform actual inference test
+            criteria = [{"name": "helpfulness", "description": "Response helpfulness", "scale": "1-5", "weight": 1.0}]
+            rubric = {"criteria": [], "scale_description": {"1": "Poor", "5": "Excellent"}}
+
+            result = await JUDGE_TOOLS.evaluate_response(response="Hi, tell me about this model in one sentence.", criteria=criteria, rubric=rubric, judge_model=primary_judge)
+
+            logger.info(f"✅ Primary judge {primary_judge} inference test successful - Score: {result['overall_score']:.2f}")
+
+            # Log the model's actual response reasoning (truncated)
+            if "reasoning" in result and result["reasoning"]:
+                for criterion, reasoning in result["reasoning"].items():
+                    truncated = reasoning[:150] + "..." if len(reasoning) > 150 else reasoning
+                    logger.info(f"   💬 Model reasoning ({criterion}): {truncated}")
+
+            # Mark judge tools as ready after successful primary judge test
+            mark_judge_tools_ready()
+        except Exception as e:
+            logger.warning(f"⚠️  Primary judge {primary_judge} test failed: {e}")
+            # Still mark as ready - server can function with fallback or rule-based judges
+            mark_judge_tools_ready()
+    elif available_judges:
+        fallback = available_judges[0]
+        logger.info(f"💡 Primary judge not available, using fallback: {fallback}")
+
+        # Test fallback judge
+        try:
+            criteria = [{"name": "helpfulness", "description": "Response helpfulness", "scale": "1-5", "weight": 1.0}]
+            rubric = {"criteria": [], "scale_description": {"1": "Poor", "5": "Excellent"}}
+
+            result = await JUDGE_TOOLS.evaluate_response(response="Hi, tell me about this model in one sentence.", criteria=criteria, rubric=rubric, judge_model=fallback)
+
+            logger.info(f"✅ Fallback judge {fallback} test successful - Score: {result['overall_score']:.2f}")
+
+            # Log the model's actual response reasoning (truncated)
+            if "reasoning" in result and result["reasoning"]:
+                for criterion, reasoning in result["reasoning"].items():
+                    truncated = reasoning[:150] + "..." if len(reasoning) > 150 else reasoning
+                    logger.info(f"   💬 Model reasoning ({criterion}): {truncated}")
+
+            # Mark judge tools as ready after successful fallback judge test
+            mark_judge_tools_ready()
+        except Exception as e:
+            logger.warning(f"⚠️  Fallback judge {fallback} test failed: {e}")
+            # Still mark as ready - server can function with rule-based judges
+            mark_judge_tools_ready()
+    else:
+        logger.warning("⚠️  No judges available, but server can still function for non-LLM evaluations")
+        # Mark judge tools as ready (even if no LLM judges available, rule-based judges can work)
+        mark_judge_tools_ready()
+
+    # Start health check server
+    try:
+        HEALTH_SERVER = await start_health_server()
+    except Exception as e:
+        logger.warning(f"⚠️  Could not start health check server: {e}")
+        HEALTH_SERVER = None
+
+    # Mark server as fully ready
+    mark_ready()
+
+    logger.info("🎯 Server ready for MCP client connections")
+    logger.info("💡 Connect via: python -m mcp_eval_server.server")
+    
+    yield
+    
+    # Cleanup on shutdown
+    logger.info("🛑 Shutting down MCP Evaluation Server...")
+    
+    # Cleanup health server
+    if HEALTH_SERVER:
+        await stop_health_server()
+    
+    logger.info("✅ Cleanup complete")
+
+
+# Initialize FastMCP server with lifespan
+mcp = FastMCP("mcp-eval-server", lifespan=lifespan_handler)
 
 # Global variables for tools (initialized in lifespan)
 JUDGE_TOOLS = None  # pylint: disable=invalid-name
@@ -481,233 +703,6 @@ async def agent_benchmark_performance(
         return {"error": str(e)}
 
 
-async def initialize_tools():
-    """Initialize all tools and storage."""
-    global JUDGE_TOOLS, PROMPT_TOOLS, AGENT_TOOLS, QUALITY_TOOLS, RAG_TOOLS, BIAS_TOOLS, ROBUSTNESS_TOOLS, SAFETY_TOOLS, MULTILINGUAL_TOOLS, PERFORMANCE_TOOLS, PRIVACY_TOOLS, WORKFLOW_TOOLS, CALIBRATION_TOOLS  # pylint: disable=global-statement
-    global EVALUATION_CACHE, JUDGE_CACHE, BENCHMARK_CACHE, RESULTS_STORE, HEALTH_SERVER  # pylint: disable=global-statement
-
-    logger.info("🚀 Starting MCP Evaluation Server...")
-    logger.info("📡 Protocol: Model Context Protocol (MCP) via FastMCP")
-    logger.info("📋 Server: mcp-eval-server v0.1.0")
-
-    # Initialize tools and storage after environment variables are loaded
-    logger.info("🔧 Initializing tools and storage...")
-
-    # Support custom configuration paths
-    models_config_path = os.getenv("MCP_EVAL_MODELS_CONFIG")
-    if models_config_path:
-        logger.info(f"📄 Using custom models config: {models_config_path}")
-
-    JUDGE_TOOLS = JudgeTools(config_path=models_config_path)
-    PROMPT_TOOLS = PromptTools(JUDGE_TOOLS)
-    AGENT_TOOLS = AgentTools(JUDGE_TOOLS)
-    QUALITY_TOOLS = QualityTools(JUDGE_TOOLS)
-    RAG_TOOLS = RAGTools(JUDGE_TOOLS)
-    BIAS_TOOLS = BiasTools(JUDGE_TOOLS)
-    ROBUSTNESS_TOOLS = RobustnessTools(JUDGE_TOOLS)
-    SAFETY_TOOLS = SafetyTools(JUDGE_TOOLS)
-    MULTILINGUAL_TOOLS = MultilingualTools(JUDGE_TOOLS)
-    PERFORMANCE_TOOLS = PerformanceTools(JUDGE_TOOLS)
-    PRIVACY_TOOLS = PrivacyTools(JUDGE_TOOLS)
-    WORKFLOW_TOOLS = WorkflowTools(JUDGE_TOOLS, PROMPT_TOOLS, AGENT_TOOLS, QUALITY_TOOLS)
-    CALIBRATION_TOOLS = CalibrationTools(JUDGE_TOOLS)
-
-    # Initialize caching and storage
-    EVALUATION_CACHE = EvaluationCache()
-    JUDGE_CACHE = JudgeResponseCache()
-    BENCHMARK_CACHE = BenchmarkCache()
-    RESULTS_STORE = ResultsStore()
-
-    # Mark storage as ready
-    mark_storage_ready()
-
-    # Log environment configuration
-    logger.info("🔧 Environment Configuration:")
-    env_vars = {
-        "OPENAI_API_KEY": bool(os.getenv("OPENAI_API_KEY")),
-        "AZURE_OPENAI_API_KEY": bool(os.getenv("AZURE_OPENAI_API_KEY")),
-        "AZURE_OPENAI_ENDPOINT": os.getenv("AZURE_OPENAI_ENDPOINT", "not set"),
-        "AZURE_DEPLOYMENT_NAME": os.getenv("AZURE_DEPLOYMENT_NAME", "not set"),
-        "ANTHROPIC_API_KEY": bool(os.getenv("ANTHROPIC_API_KEY")),
-        "AWS_ACCESS_KEY_ID": bool(os.getenv("AWS_ACCESS_KEY_ID")),
-        "GOOGLE_API_KEY": bool(os.getenv("GOOGLE_API_KEY")),
-        "WATSONX_API_KEY": bool(os.getenv("WATSONX_API_KEY")),
-        "WATSONX_PROJECT_ID": os.getenv("WATSONX_PROJECT_ID", "not set"),
-        "OLLAMA_BASE_URL": os.getenv("OLLAMA_BASE_URL", "not set"),
-        "DEFAULT_JUDGE_MODEL": os.getenv("DEFAULT_JUDGE_MODEL", "not set"),
-    }
-    for var, value in env_vars.items():
-        if var in ["AZURE_OPENAI_ENDPOINT", "AZURE_DEPLOYMENT_NAME", "WATSONX_PROJECT_ID", "OLLAMA_BASE_URL", "DEFAULT_JUDGE_MODEL"]:
-            logger.info(f"   📊 {var}: {value}")
-        else:
-            status = "✅" if value else "❌"
-            logger.info(f"   {status} {var}: {'configured' if value else 'not set'}")
-
-    # Log judge initialization and test connectivity
-    available_judges = JUDGE_TOOLS.get_available_judges()
-    logger.info(f"⚖️  Loaded {len(available_judges)} judge models: {available_judges}")
-
-    # Test judge connectivity and log detailed status with endpoints
-    for judge_name in available_judges:
-        info = JUDGE_TOOLS.get_judge_info(judge_name)
-        provider = info.get("provider", "unknown")
-        model_name = info.get("model_name", "N/A")
-
-        # Get detailed configuration for each judge
-        judge_instance = JUDGE_TOOLS.judges.get(judge_name)
-        endpoint_info = ""
-
-        if provider == "openai" and hasattr(judge_instance, "client"):
-            base_url = str(judge_instance.client.base_url) if judge_instance.client.base_url else "https://api.openai.com/v1"
-            endpoint_info = f" → {base_url}"
-        elif provider == "azure":
-            endpoint = os.getenv("AZURE_OPENAI_ENDPOINT", "not configured")
-            deployment = os.getenv("AZURE_DEPLOYMENT_NAME", "not configured")
-            endpoint_info = f" → {endpoint} (deployment: {deployment})"
-        elif provider == "anthropic":
-            endpoint_info = " → https://api.anthropic.com"
-        elif provider == "ollama":
-            base_url = os.getenv("OLLAMA_BASE_URL", "http://localhost:11434")
-            # Test OLLAMA connectivity for status display
-            try:
-                # Third-Party
-                import aiohttp  # pylint: disable=import-outside-toplevel
-
-                async def test_ollama(test_url, aiohttp_module):  # pylint: disable=redefined-outer-name
-                    try:
-                        timeout = aiohttp_module.ClientTimeout(total=2)
-                        async with aiohttp_module.ClientSession(timeout=timeout) as session:
-                            async with session.get(f"{test_url}/api/tags") as response:
-                                return response.status == 200
-                    except Exception:
-                        return False
-
-                is_connected = await test_ollama(base_url, aiohttp)
-                status = "🟢 connected" if is_connected else "🔴 not reachable"
-                endpoint_info = f" → {base_url} ({status})"
-            except Exception:
-                endpoint_info = f" → {base_url} (🔴 not reachable)"
-        elif provider == "bedrock":
-            region = os.getenv("AWS_REGION", "us-east-1")
-            endpoint_info = f" → AWS Bedrock ({region})"
-        elif provider == "gemini":
-            endpoint_info = " → Google AI Studio"
-        elif provider == "watsonx":
-            watsonx_url = os.getenv("WATSONX_URL", "https://us-south.ml.cloud.ibm.com")
-            project_id = os.getenv("WATSONX_PROJECT_ID", "not configured")
-            endpoint_info = f" → {watsonx_url} (project: {project_id})"
-
-        logger.info(f"   📊 {judge_name} ({provider}): {model_name}{endpoint_info}")
-
-    # Log tool categories
-    logger.info("🛠️  Tool categories:")
-    logger.info("   • 4 Judge tools (evaluate, compare, rank, reference)")
-    logger.info("   • 4 Prompt tools (clarity, consistency, completeness, relevance)")
-    logger.info("   • 4 Agent tools (tool usage, task completion, reasoning, benchmarks)")
-    logger.info("   • 3 Quality tools (factuality, coherence, toxicity)")
-    logger.info("   • 8 RAG tools (retrieval, context, grounding, hallucination, coverage, citations, chunks, benchmarks)")
-    logger.info("   • 6 Bias & Fairness tools (demographic, representation, equity, cultural, linguistic, intersectional)")
-    logger.info("   • 5 Robustness tools (adversarial, sensitivity, injection, distribution, consistency)")
-    logger.info("   • 4 Safety & Alignment tools (harmful content, instruction following, refusal, value alignment)")
-    logger.info("   • 4 Multilingual tools (translation quality, cross-lingual consistency, cultural adaptation, language mixing)")
-    logger.info("   • 4 Performance tools (latency, efficiency, throughput, memory)")
-    logger.info("   • 8 Privacy tools (PII detection, data minimization, consent compliance, anonymization, leakage detection)")
-    logger.info("   • 3 Workflow tools (suites, execution, comparison)")
-    logger.info("   • 2 Calibration tools (agreement, optimization)")
-    logger.info("   • 4 Server tools (management, statistics, health)")
-
-    # Test primary judge with a simple evaluation if available
-    primary_judge = os.getenv("DEFAULT_JUDGE_MODEL", "gpt-4o-mini")
-    logger.info(f"🎯 Primary judge selection: {primary_judge}")
-
-    if primary_judge in available_judges:
-        try:
-            logger.info(f"🧪 Testing primary judge: {primary_judge}")
-
-            # Perform actual inference test
-            criteria = [{"name": "helpfulness", "description": "Response helpfulness", "scale": "1-5", "weight": 1.0}]
-            rubric = {"criteria": [], "scale_description": {"1": "Poor", "5": "Excellent"}}
-
-            result = await JUDGE_TOOLS.evaluate_response(response="Hi, tell me about this model in one sentence.", criteria=criteria, rubric=rubric, judge_model=primary_judge)
-
-            logger.info(f"✅ Primary judge {primary_judge} inference test successful - Score: {result['overall_score']:.2f}")
-
-            # Log the model's actual response reasoning (truncated)
-            if "reasoning" in result and result["reasoning"]:
-                for criterion, reasoning in result["reasoning"].items():
-                    truncated = reasoning[:150] + "..." if len(reasoning) > 150 else reasoning
-                    logger.info(f"   💬 Model reasoning ({criterion}): {truncated}")
-
-            # Mark judge tools as ready after successful primary judge test
-            mark_judge_tools_ready()
-        except Exception as e:
-            logger.warning(f"⚠️  Primary judge {primary_judge} test failed: {e}")
-            # Still mark as ready - server can function with fallback or rule-based judges
-            mark_judge_tools_ready()
-    elif available_judges:
-        fallback = available_judges[0]
-        logger.info(f"💡 Primary judge not available, using fallback: {fallback}")
-
-        # Test fallback judge
-        try:
-            criteria = [{"name": "helpfulness", "description": "Response helpfulness", "scale": "1-5", "weight": 1.0}]
-            rubric = {"criteria": [], "scale_description": {"1": "Poor", "5": "Excellent"}}
-
-            result = await JUDGE_TOOLS.evaluate_response(response="Hi, tell me about this model in one sentence.", criteria=criteria, rubric=rubric, judge_model=fallback)
-
-            logger.info(f"✅ Fallback judge {fallback} test successful - Score: {result['overall_score']:.2f}")
-
-            # Log the model's actual response reasoning (truncated)
-            if "reasoning" in result and result["reasoning"]:
-                for criterion, reasoning in result["reasoning"].items():
-                    truncated = reasoning[:150] + "..." if len(reasoning) > 150 else reasoning
-                    logger.info(f"   💬 Model reasoning ({criterion}): {truncated}")
-
-            # Mark judge tools as ready after successful fallback judge test
-            mark_judge_tools_ready()
-        except Exception as e:
-            logger.warning(f"⚠️  Fallback judge {fallback} test failed: {e}")
-            # Still mark as ready - server can function with rule-based judges
-            mark_judge_tools_ready()
-    else:
-        logger.warning("⚠️  No judges available, but server can still function for non-LLM evaluations")
-        # Mark judge tools as ready (even if no LLM judges available, rule-based judges can work)
-        mark_judge_tools_ready()
-
-    # Start health check server
-    try:
-        HEALTH_SERVER = await start_health_server()
-    except Exception as e:
-        logger.warning(f"⚠️  Could not start health check server: {e}")
-        HEALTH_SERVER = None
-
-    # Mark server as fully ready
-    mark_ready()
-
-    logger.info("🎯 Server ready for MCP client connections")
-    logger.info("💡 Connect via: python -m mcp_eval_server.server")
-
-
-async def cleanup():
-    """Cleanup resources on shutdown."""
-    global HEALTH_SERVER  # pylint: disable=global-statement
-    
-    logger.info("🛑 Shutting down MCP Evaluation Server...")
-    
-    # Cleanup health server
-    if HEALTH_SERVER:
-        await stop_health_server()
-    
-    logger.info("✅ Cleanup complete")
-
-
-# Register lifespan handlers
-@mcp.lifespan()
-async def lifespan():
-    """Lifespan context manager for startup and shutdown."""
-    await initialize_tools()
-    yield
-    await cleanup()
 
 
 def main():
