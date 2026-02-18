@@ -9,6 +9,8 @@ Caching system for MCP Eval Server.
 
 # Standard
 from hashlib import sha256
+import os
+from pathlib import Path
 import time
 from typing import Any, Dict, Optional
 
@@ -30,8 +32,33 @@ class EvaluationCache:
             disk_cache_dir: Directory for persistent disk cache
         """
         self.memory_cache = TTLCache(maxsize=max_size, ttl=ttl_seconds)
-        self.disk_cache = dc.Cache(disk_cache_dir) if disk_cache_dir else None
         self.ttl_seconds = ttl_seconds
+        
+        # Initialize disk cache with proper error handling
+        if disk_cache_dir:
+            try:
+                # Ensure cache directory exists and is writable
+                cache_path = Path(disk_cache_dir).resolve()
+                cache_path.mkdir(parents=True, exist_ok=True)
+                
+                # Verify directory is writable
+                if not os.access(cache_path, os.W_OK):
+                    raise RuntimeError(
+                        f"Cache directory {cache_path} is not writable. "
+                        f"Check directory permissions."
+                    )
+                
+                self.disk_cache = dc.Cache(str(cache_path))
+            except (OSError, PermissionError, RuntimeError) as e:
+                # Log warning but continue with memory-only cache
+                import logging
+                logging.warning(
+                    f"Could not initialize disk cache at {disk_cache_dir}: {e}. "
+                    f"Falling back to memory-only cache."
+                )
+                self.disk_cache = None
+        else:
+            self.disk_cache = None
 
     def _generate_key(self, **kwargs) -> str:
         """Generate cache key from parameters.
