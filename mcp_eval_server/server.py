@@ -573,7 +573,6 @@ async def prompt_assess_relevance(
         logger.error(f"Error in prompt_assess_relevance: {str(e)}")
         return {"error": str(e)}
 
-
 # Agent evaluation tools
 @mcp.tool()
 async def agent_evaluate_tool_use(
@@ -707,7 +706,991 @@ async def agent_benchmark_performance(
         logger.error(f"Error in agent_benchmark_performance: {str(e)}")
         return {"error": str(e)}
 
+# Quality tools
+@mcp.tool()
+async def quality_evaluate_factuality(
+    response: str,
+    knowledge_base: dict,
+    fact_checking_model: str = "gpt-4",
+    confidence_threshold: float = 0.8,
+    judge_model: str = "gpt-4o-mini",
+) -> dict[str, Any]:
+    """Check factual accuracy of responses against knowledge bases."""
+    try:
+        result = await QUALITY_TOOLS.evaluate_factuality(
+            response=response,
+            knowledge_base=knowledge_base,
+            fact_checking_model=fact_checking_model,
+            confidence_threshold=confidence_threshold,
+            judge_model=judge_model,
+        )
+        return result
+    except Exception as e:
+        logger.error(f"Error in quality_evaluate_factuality: {str(e)}")
+        return {"error": str(e)}
 
+@mcp.tool()
+async def quality_measure_coherence(
+    text: str,
+    context: str = "",
+    coherence_dimensions: list[str] = ["logical_flow", "consistency", "topic_transitions"],
+    judge_model: str = "gpt-4o-mini",
+) -> dict[str, Any]:
+    """Analyze logical flow and consistency of text using rule-based and LLM metrics."""
+    try:
+        result = await QUALITY_TOOLS.measure_coherence(
+            text=text,
+            context=context,
+            coherence_dimensions=coherence_dimensions,
+            judge_model=judge_model,
+        )
+        return result
+    except Exception as e:
+        logger.error(f"Error in quality_measure_coherence: {str(e)}")
+        return {"error": str(e)}
+
+@mcp.tool()
+async def quality_assess_toxicity(
+    content: str,
+    toxicity_categories: list[str] = ["profanity", "hate_speech", "threats", "discrimination"],
+    sensitivity_level: str = "moderate",
+    judge_model: str = "gpt-4o-mini",
+) -> dict[str, Any]:
+    """Detect harmful or biased content using pattern matching and LLM analysis."""
+    try:
+        result = await QUALITY_TOOLS.assess_toxicity(
+            content=content,
+            toxicity_categories=toxicity_categories,
+            sensitivity_level=sensitivity_level,
+            judge_model=judge_model,
+        )
+        return result
+    except Exception as e:
+        logger.error(f"Error in quality_assess_toxicity: {str(e)}")
+        return {"error": str(e)}
+
+# RAG tools
+@mcp.tool()
+async def rag_evaluate_retrieval_relevance(
+    query: str,
+    retrieved_documents: list,
+    relevance_threshold: float = 0.7,
+    embedding_model: str = "text-embedding-ada-002",
+    judge_model: str = "gpt-4o-mini",
+    use_llm_judge: bool = True,
+) -> dict[str, Any]:
+    """Assess relevance of retrieved documents to the query using semantic similarity and LLM judges."""
+    try:
+        result = await RAG_TOOLS.evaluate_retrieval_relevance(
+            query=query,
+            retrieved_documents=retrieved_documents,
+            relevance_threshold=relevance_threshold,
+            embedding_model=embedding_model,
+            judge_model=judge_model,
+            use_llm_judge=use_llm_judge,
+        )
+        return result
+    except Exception as e:
+        logger.error(f"Error in rag_evaluate_retrieval_relevance: {str(e)}")
+        return {"error": str(e)}
+
+
+@mcp.tool()
+async def rag_measure_context_utilization(
+    query: str,
+    retrieved_context: str,
+    generated_answer: str,
+    context_chunks: list[str] = None,
+    judge_model: str = "gpt-4o-mini",
+) -> dict[str, Any]:
+    """Check how well retrieved context is used in the generated answer."""
+    try:
+        result = await RAG_TOOLS.measure_context_utilization(
+            query=query,
+            retrieved_context=retrieved_context,
+            generated_answer=generated_answer,
+            context_chunks=context_chunks,
+            judge_model=judge_model,
+        )
+        return result
+    except Exception as e:
+        logger.error(f"Error in rag_measure_context_utilization: {str(e)}")
+        return {"error": str(e)}
+
+
+@mcp.tool()
+async def rag_assess_answer_groundedness(
+    question: str,
+    answer: str,
+    supporting_context: str,
+    judge_model: str = "gpt-4o-mini",
+    strictness: str = "moderate",
+) -> dict[str, Any]:
+    """Verify answers are grounded in provided context by checking claim support."""
+    try:
+        result = await RAG_TOOLS.assess_answer_groundedness(
+            question=question,
+            answer=answer,
+            supporting_context=supporting_context,
+            judge_model=judge_model,
+            strictness=strictness,
+        )
+        return result
+    except Exception as e:
+        logger.error(f"Error in rag_assess_answer_groundedness: {str(e)}")
+        return {"error": str(e)}
+
+
+@mcp.tool()
+async def rag_detect_hallucination_vs_context(
+    generated_text: str,
+    source_context: str,
+    judge_model: str = "gpt-4o-mini",
+    detection_threshold: float = 0.8,
+) -> dict[str, Any]:
+    """Identify when responses contradict provided context using statement verification."""
+    try:
+        result = await RAG_TOOLS.detect_hallucination_vs_context(
+            generated_text=generated_text,
+            source_context=source_context,
+            judge_model=judge_model,
+            detection_threshold=detection_threshold,
+        )
+        return result
+    except Exception as e:
+        logger.error(f"Error in rag_detect_hallucination_vs_context: {str(e)}")
+        return {"error": str(e)}
+
+
+@mcp.tool()
+async def rag_evaluate_retrieval_coverage(
+    query: str,
+    expected_topics: list[str],
+    retrieved_documents: list,
+    judge_model: str = "gpt-4o-mini",
+) -> dict[str, Any]:
+    """Measure if key information was retrieved by checking topic coverage."""
+    try:
+        result = await RAG_TOOLS.evaluate_retrieval_coverage(
+            query=query,
+            expected_topics=expected_topics,
+            retrieved_documents=retrieved_documents,
+            judge_model=judge_model,
+        )
+        return result
+    except Exception as e:
+        logger.error(f"Error in rag_evaluate_retrieval_coverage: {str(e)}")
+        return {"error": str(e)}
+
+
+@mcp.tool()
+async def rag_assess_citation_accuracy(
+    generated_text: str,
+    source_documents: list,
+    citation_format: str = "auto",
+    judge_model: str = "gpt-4o-mini",
+) -> dict[str, Any]:
+    """Validate citation quality and accuracy against source documents."""
+    try:
+        result = await RAG_TOOLS.assess_citation_accuracy(
+            generated_text=generated_text,
+            source_documents=source_documents,
+            citation_format=citation_format,
+            judge_model=judge_model,
+        )
+        return result
+    except Exception as e:
+        logger.error(f"Error in rag_assess_citation_accuracy: {str(e)}")
+        return {"error": str(e)}
+
+
+@mcp.tool()
+async def rag_measure_chunk_relevance(
+    query: str,
+    context_chunks: list[str],
+    embedding_model: str = "text-embedding-ada-002",
+    relevance_threshold: float = 0.6,
+    judge_model: str = "gpt-4o-mini",
+) -> dict[str, Any]:
+    """Evaluate individual chunk relevance scores using semantic similarity and LLM assessment."""
+    try:
+        result = await RAG_TOOLS.measure_chunk_relevance(
+            query=query,
+            context_chunks=context_chunks,
+            embedding_model=embedding_model,
+            relevance_threshold=relevance_threshold,
+            judge_model=judge_model,
+        )
+        return result
+    except Exception as e:
+        logger.error(f"Error in rag_measure_chunk_relevance: {str(e)}")
+        return {"error": str(e)}
+
+
+@mcp.tool()
+async def rag_benchmark_retrieval_systems(
+    test_queries: list,
+    retrieval_systems: list,
+    evaluation_metrics: list[str] = ["precision", "recall", "mrr", "ndcg"],
+    judge_model: str = "gpt-4o-mini",
+) -> dict[str, Any]:
+    """Compare different retrieval approaches using standard IR metrics."""
+    try:
+        result = await RAG_TOOLS.benchmark_retrieval_systems(
+            test_queries=test_queries,
+            retrieval_systems=retrieval_systems,
+            evaluation_metrics=evaluation_metrics,
+            judge_model=judge_model,
+        )
+        return result
+    except Exception as e:
+        logger.error(f"Error in rag_benchmark_retrieval_systems: {str(e)}")
+        return {"error": str(e)}
+
+
+# Bias & Fairness tools
+@mcp.tool()
+async def bias_detect_demographic_bias(
+    text: str,
+    protected_groups: list[str] = None,
+    bias_types: list[str] = ["stereotyping", "exclusionary", "diminishing"],
+    judge_model: str = "gpt-4o-mini",
+    sensitivity_threshold: float = 0.7,
+) -> dict[str, Any]:
+    """Identify bias against protected groups using pattern matching and LLM assessment."""
+    try:
+        result = await BIAS_TOOLS.detect_demographic_bias(
+            text=text,
+            protected_groups=protected_groups,
+            bias_types=bias_types,
+            judge_model=judge_model,
+            sensitivity_threshold=sensitivity_threshold,
+        )
+        return result
+    except Exception as e:
+        logger.error(f"Error in bias_detect_demographic_bias: {str(e)}")
+        return {"error": str(e)}
+
+
+@mcp.tool()
+async def bias_measure_representation_fairness(
+    text: str,
+    target_groups: list[str],
+    representation_contexts: list[str] = ["leadership", "expertise", "success", "achievement", "competence"],
+    judge_model: str = "gpt-4o-mini",
+) -> dict[str, Any]:
+    """Assess balanced representation across groups in different contexts."""
+    try:
+        result = await BIAS_TOOLS.measure_representation_fairness(
+            text=text,
+            target_groups=target_groups,
+            representation_contexts=representation_contexts,
+            judge_model=judge_model,
+        )
+        return result
+    except Exception as e:
+        logger.error(f"Error in bias_measure_representation_fairness: {str(e)}")
+        return {"error": str(e)}
+
+
+@mcp.tool()
+async def bias_evaluate_outcome_equity(
+    scenarios: list[dict[str, Any]],
+    protected_attributes: list[str],
+    outcome_measures: list[str] = ["success_rate", "quality_score", "approval_rate"],
+    judge_model: str = "gpt-4o-mini",
+) -> dict[str, Any]:
+    """Check for disparate impacts across protected groups in outcomes."""
+    try:
+        result = await BIAS_TOOLS.evaluate_outcome_equity(
+            scenarios=scenarios,
+            protected_attributes=protected_attributes,
+            outcome_measures=outcome_measures,
+            judge_model=judge_model,
+        )
+        return result
+    except Exception as e:
+        logger.error(f"Error in bias_evaluate_outcome_equity: {str(e)}")
+        return {"error": str(e)}
+
+
+@mcp.tool()
+async def bias_assess_cultural_sensitivity(
+    text: str,
+    cultural_contexts: list[str] = ["western", "eastern", "african", "latin", "middle_eastern", "indigenous"],
+    sensitivity_dimensions: list[str] = ["respect", "awareness", "inclusivity", "accuracy", "appropriateness"],
+    judge_model: str = "gpt-4o-mini",
+) -> dict[str, Any]:
+    """Evaluate cross-cultural appropriateness and cultural awareness."""
+    try:
+        result = await BIAS_TOOLS.assess_cultural_sensitivity(
+            text=text,
+            cultural_contexts=cultural_contexts,
+            sensitivity_dimensions=sensitivity_dimensions,
+            judge_model=judge_model,
+        )
+        return result
+    except Exception as e:
+        logger.error(f"Error in bias_assess_cultural_sensitivity: {str(e)}")
+        return {"error": str(e)}
+
+
+@mcp.tool()
+async def bias_detect_linguistic_bias(
+    text: str,
+    linguistic_dimensions: list[str] = ["formality", "complexity", "dialect", "accent", "grammar"],
+    dialect_variants: list[str] = ["aave", "southern", "urban", "rural", "formal", "informal"],
+    judge_model: str = "gpt-4o-mini",
+) -> dict[str, Any]:
+    """Identify language-based discrimination and dialect bias."""
+    try:
+        result = await BIAS_TOOLS.detect_linguistic_bias(
+            text=text,
+            linguistic_dimensions=linguistic_dimensions,
+            dialect_variants=dialect_variants,
+            judge_model=judge_model,
+        )
+        return result
+    except Exception as e:
+        logger.error(f"Error in bias_detect_linguistic_bias: {str(e)}")
+        return {"error": str(e)}
+
+
+@mcp.tool()
+async def bias_measure_intersectional_fairness(
+    text: str,
+    intersectional_groups: list[list[str]],
+    fairness_metrics: list[str] = ["representation", "sentiment", "agency", "competence"],
+    judge_model: str = "gpt-4o-mini",
+) -> dict[str, Any]:
+    """Evaluate compound bias effects across multiple identity dimensions."""
+    try:
+        result = await BIAS_TOOLS.measure_intersectional_fairness(
+            text=text,
+            intersectional_groups=intersectional_groups,
+            fairness_metrics=fairness_metrics,
+            judge_model=judge_model,
+        )
+        return result
+    except Exception as e:
+        logger.error(f"Error in bias_measure_intersectional_fairness: {str(e)}")
+        return {"error": str(e)}
+
+
+# Robustness tools
+@mcp.tool()
+async def robustness_test_adversarial_inputs(
+    base_prompt: str,
+    adversarial_inputs: list[str] = None,
+    attack_types: list[str] = ["prompt_injection", "manipulation", "social_engineering"],
+    target_model: str = "test_model",
+    judge_model: str = "gpt-4o-mini",
+) -> dict[str, Any]:
+    """Evaluate system response to malicious prompts and attack vectors."""
+    try:
+        result = await ROBUSTNESS_TOOLS.test_adversarial_inputs(
+            base_prompt=base_prompt,
+            adversarial_inputs=adversarial_inputs,
+            attack_types=attack_types,
+            target_model=target_model,
+            judge_model=judge_model,
+        )
+        return result
+    except Exception as e:
+        logger.error(f"Error in robustness_test_adversarial_inputs: {str(e)}")
+        return {"error": str(e)}
+
+
+@mcp.tool()
+async def robustness_measure_input_sensitivity(
+    base_input: str,
+    perturbation_types: list[str] = ["typos", "synonyms", "reordering", "paraphrasing", "capitalization"],
+    num_perturbations: int = 10,
+    sensitivity_threshold: float = 0.1,
+    judge_model: str = "gpt-4o-mini",
+) -> dict[str, Any]:
+    """Test response stability to input variations and perturbations."""
+    try:
+        result = await ROBUSTNESS_TOOLS.measure_input_sensitivity(
+            base_input=base_input,
+            perturbation_types=perturbation_types,
+            num_perturbations=num_perturbations,
+            sensitivity_threshold=sensitivity_threshold,
+            judge_model=judge_model,
+        )
+        return result
+    except Exception as e:
+        logger.error(f"Error in robustness_measure_input_sensitivity: {str(e)}")
+        return {"error": str(e)}
+
+
+@mcp.tool()
+async def robustness_evaluate_prompt_injection_resistance(
+    system_prompt: str,
+    injection_attempts: list[str] = None,
+    injection_strategies: list[str] = ["direct_override", "role_assumption", "context_switching", "encoding_bypass"],
+    judge_model: str = "gpt-4o-mini",
+) -> dict[str, Any]:
+    """Check prompt injection defenses and security measures."""
+    try:
+        result = await ROBUSTNESS_TOOLS.evaluate_prompt_injection_resistance(
+            system_prompt=system_prompt,
+            injection_attempts=injection_attempts,
+            injection_strategies=injection_strategies,
+            judge_model=judge_model,
+        )
+        return result
+    except Exception as e:
+        logger.error(f"Error in robustness_evaluate_prompt_injection_resistance: {str(e)}")
+        return {"error": str(e)}
+
+
+@mcp.tool()
+async def robustness_assess_distribution_shift(
+    in_domain_samples: list[str],
+    out_of_domain_samples: list[str],
+    performance_metrics: list[str] = ["quality", "relevance", "coherence", "factuality"],
+    judge_model: str = "gpt-4o-mini",
+) -> dict[str, Any]:
+    """Test performance degradation on out-of-domain data."""
+    try:
+        result = await ROBUSTNESS_TOOLS.assess_distribution_shift(
+            in_domain_samples=in_domain_samples,
+            out_of_domain_samples=out_of_domain_samples,
+            performance_metrics=performance_metrics,
+            judge_model=judge_model,
+        )
+        return result
+    except Exception as e:
+        logger.error(f"Error in robustness_assess_distribution_shift: {str(e)}")
+        return {"error": str(e)}
+
+
+@mcp.tool()
+async def robustness_measure_consistency_under_perturbation(
+    base_inputs: list[str],
+    perturbation_strength: float = 0.1,
+    consistency_metrics: list[str] = ["semantic_similarity", "factual_consistency", "response_length", "sentiment"],
+    num_trials: int = 5,
+    judge_model: str = "gpt-4o-mini",
+) -> dict[str, Any]:
+    """Check output stability under various input perturbations."""
+    try:
+        result = await ROBUSTNESS_TOOLS.measure_consistency_under_perturbation(
+            base_inputs=base_inputs,
+            perturbation_strength=perturbation_strength,
+            consistency_metrics=consistency_metrics,
+            num_trials=num_trials,
+            judge_model=judge_model,
+        )
+        return result
+    except Exception as e:
+        logger.error(f"Error in robustness_measure_consistency_under_perturbation: {str(e)}")
+        return {"error": str(e)}
+
+
+# Safety & Alignment tools
+@mcp.tool()
+async def safety_detect_harmful_content(
+    text: str,
+    harm_categories: list[str] = None,
+    detection_threshold: float = 0.7,
+    judge_model: str = "gpt-4o-mini",
+    include_context: bool = True,
+) -> dict[str, Any]:
+    """Identify dangerous or harmful outputs."""
+    try:
+        result = await SAFETY_TOOLS.detect_harmful_content(
+            text=text,
+            harm_categories=harm_categories,
+            detection_threshold=detection_threshold,
+            judge_model=judge_model,
+            include_context=include_context,
+        )
+        return result
+    except Exception as e:
+        logger.error(f"Error in safety_detect_harmful_content: {str(e)}")
+        return {"error": str(e)}
+
+
+@mcp.tool()
+async def safety_assess_instruction_following(
+    instructions: str,
+    response: str,
+    instruction_types: list[str] = None,
+    adherence_threshold: float = 0.8,
+    judge_model: str = "gpt-4o-mini",
+) -> dict[str, Any]:
+    """Measure adherence to constraints and instructions."""
+    try:
+        result = await SAFETY_TOOLS.assess_instruction_following(
+            instructions=instructions,
+            response=response,
+            instruction_types=instruction_types,
+            adherence_threshold=adherence_threshold,
+            judge_model=judge_model,
+        )
+        return result
+    except Exception as e:
+        logger.error(f"Error in safety_assess_instruction_following: {str(e)}")
+        return {"error": str(e)}
+
+
+@mcp.tool()
+async def safety_evaluate_refusal_appropriateness(
+    requests: list[dict[str, Any]],
+    refusal_criteria: list[str] = None,
+    appropriateness_threshold: float = 0.8,
+    judge_model: str = "gpt-4o-mini",
+) -> dict[str, Any]:
+    """Check when system appropriately refuses requests."""
+    try:
+        result = await SAFETY_TOOLS.evaluate_refusal_appropriateness(
+            requests=requests,
+            refusal_criteria=refusal_criteria,
+            _appropriateness_threshold=appropriateness_threshold,
+            judge_model=judge_model,
+        )
+        return result
+    except Exception as e:
+        logger.error(f"Error in safety_evaluate_refusal_appropriateness: {str(e)}")
+        return {"error": str(e)}
+
+
+@mcp.tool()
+async def safety_measure_value_alignment(
+    scenarios: list[dict[str, Any]],
+    alignment_principles: list[str] = None,
+    weight_distribution: dict[str, float] = None,
+    judge_model: str = "gpt-4o-mini",
+) -> dict[str, Any]:
+    """Assess alignment with human values."""
+    try:
+        result = await SAFETY_TOOLS.measure_value_alignment(
+            scenarios=scenarios,
+            alignment_principles=alignment_principles,
+            weight_distribution=weight_distribution,
+            judge_model=judge_model,
+        )
+        return result
+    except Exception as e:
+        logger.error(f"Error in safety_measure_value_alignment: {str(e)}")
+        return {"error": str(e)}
+
+
+# Multilingual tools
+@mcp.tool()
+async def multilingual_evaluate_translation_quality(
+    source_text: str,
+    translated_text: str,
+    source_language: str,
+    target_language: str,
+    quality_dimensions: list[str] = None,
+    judge_model: str = "gpt-4o-mini",
+) -> dict[str, Any]:
+    """Assess translation accuracy and quality."""
+    try:
+        result = await MULTILINGUAL_TOOLS.evaluate_translation_quality(
+            source_text=source_text,
+            translated_text=translated_text,
+            source_language=source_language,
+            target_language=target_language,
+            quality_dimensions=quality_dimensions,
+            judge_model=judge_model,
+        )
+        return result
+    except Exception as e:
+        logger.error(f"Error in multilingual_evaluate_translation_quality: {str(e)}")
+        return {"error": str(e)}
+
+@mcp.tool()
+async def multilingual_measure_cross_lingual_consistency(
+    base_text: str,
+    base_language: str,
+    translated_versions: dict,
+    consistency_metrics: list[str] = None,
+    judge_model: str = "gpt-4o-mini",
+) -> dict[str, Any]:
+    """Check consistency across languages."""
+    try:
+        result = await MULTILINGUAL_TOOLS.measure_cross_lingual_consistency(
+            base_text=base_text,
+            base_language=base_language,
+            translated_versions=translated_versions,
+            consistency_metrics=consistency_metrics,
+            judge_model=judge_model,
+        )
+        return result
+    except Exception as e:
+        logger.error(f"Error in multilingual_measure_cross_lingual_consistency: {str(e)}")
+        return {"error": str(e)}
+
+@mcp.tool()
+async def multilingual_assess_cultural_adaptation(
+    text: str,
+    target_culture: str,
+    cultural_dimensions: list[str] = None,
+    reference_text: str = None,
+    judge_model: str = "gpt-4o-mini",
+) -> dict[str, Any]:
+    """Evaluate cultural appropriateness and adaptation."""
+    try:
+        result = await MULTILINGUAL_TOOLS.assess_cultural_adaptation(
+            text=text,
+            target_culture=target_culture,
+            cultural_dimensions=cultural_dimensions,
+            reference_text=reference_text,
+            judge_model=judge_model,
+        )
+        return result
+    except Exception as e:
+        logger.error(f"Error in multilingual_assess_cultural_adaptation: {str(e)}")
+        return {"error": str(e)}
+
+@mcp.tool()
+async def multilingual_detect_language_mixing(
+    text: str,
+    expected_language: str,
+    mixing_tolerance: float = 0.05,
+    detection_method: str = "pattern_based",
+    judge_model: str = "gpt-4o-mini",
+) -> dict[str, Any]:
+    """Identify inappropriate code-switching or language mixing."""
+    try:
+        result = await MULTILINGUAL_TOOLS.detect_language_mixing(
+            text=text,
+            expected_language=expected_language,
+            mixing_tolerance=mixing_tolerance,
+            detection_method=detection_method,
+            judge_model=judge_model,
+        )
+        return result
+    except Exception as e:
+        logger.error(f"Error in multilingual_detect_language_mixing: {str(e)}")
+        return {"error": str(e)}
+
+
+# Performance tools
+@mcp.tool()
+async def performance_measure_response_latency(
+    test_inputs: list[str],
+    warmup_runs: int = 2,
+    measurement_runs: int = 10,
+    timeout_seconds: float = 30.0,
+) -> dict[str, Any]:
+    """Track generation speed and response times."""
+    try:
+        result = await PERFORMANCE_TOOLS.measure_response_latency(
+            test_inputs=test_inputs,
+            warmup_runs=warmup_runs,
+            measurement_runs=measurement_runs,
+            timeout_seconds=timeout_seconds,
+        )
+        return result
+    except Exception as e:
+        logger.error(f"Error in performance_measure_response_latency: {str(e)}")
+        return {"error": str(e)}
+
+@mcp.tool()
+async def performance_assess_computational_efficiency(
+    test_workloads: list[dict],
+    resource_monitoring_interval: float = 0.1,
+    efficiency_metrics: list[str] = None,
+) -> dict[str, Any]:
+    """Measure resource usage and computational efficiency."""
+    try:
+        result = await PERFORMANCE_TOOLS.assess_computational_efficiency(
+            test_workloads=test_workloads,
+            resource_monitoring_interval=resource_monitoring_interval,
+            efficiency_metrics=efficiency_metrics,
+        )
+        return result
+    except Exception as e:
+        logger.error(f"Error in performance_assess_computational_efficiency: {str(e)}")
+        return {"error": str(e)}
+
+@mcp.tool()
+async def performance_evaluate_throughput_scaling(
+    test_request: str,
+    concurrency_levels: list[int] = None,
+    requests_per_level: int = 20,
+) -> dict[str, Any]:
+    """Test concurrent request handling and scaling behavior."""
+    try:
+        result = await PERFORMANCE_TOOLS.evaluate_throughput_scaling(
+            test_request=test_request,
+            concurrency_levels=concurrency_levels,
+            requests_per_level=requests_per_level,
+        )
+        return result
+    except Exception as e:
+        logger.error(f"Error in performance_evaluate_throughput_scaling: {str(e)}")
+        return {"error": str(e)}
+
+@mcp.tool()
+async def performance_monitor_memory_usage(
+    monitoring_duration: float = 60.0,
+    sampling_interval: float = 1.0,
+    memory_threshold_mb: float = 1000.0,
+) -> dict[str, Any]:
+    """Track memory consumption patterns during execution."""
+    try:
+        result = await PERFORMANCE_TOOLS.monitor_memory_usage(
+            monitoring_duration=monitoring_duration,
+            sampling_interval=sampling_interval,
+            memory_threshold_mb=memory_threshold_mb,
+        )
+        return result
+    except Exception as e:
+        logger.error(f"Error in performance_monitor_memory_usage: {str(e)}")
+        return {"error": str(e)}
+
+
+# Privacy tools
+@mcp.tool()
+async def privacy_detect_pii_exposure(
+    text: str,
+    pii_types: list[str] = None,
+    sensitivity_level: str = "high",
+    include_context: bool = True,
+    judge_model: str = "gpt-4o-mini",
+) -> dict[str, Any]:
+    """Detect personally identifiable information in text."""
+    try:
+        result = await PRIVACY_TOOLS.detect_pii_exposure(
+            text=text,
+            pii_types=pii_types,
+            sensitivity_level=sensitivity_level,
+            include_context=include_context,
+            judge_model=judge_model,
+        )
+        return result
+    except Exception as e:
+        logger.error(f"Error in privacy_detect_pii_exposure: {str(e)}")
+        return {"error": str(e)}
+
+
+@mcp.tool()
+async def privacy_assess_data_minimization(
+    collected_data: dict,
+    stated_purpose: str,
+    data_categories: list[str] = None,
+    judge_model: str = "gpt-4o-mini",
+) -> dict[str, Any]:
+    """Evaluate if data collection follows minimization principles."""
+    try:
+        result = await PRIVACY_TOOLS.assess_data_minimization(
+            collected_data=collected_data,
+            stated_purpose=stated_purpose,
+            data_categories=data_categories,
+            judge_model=judge_model,
+        )
+        return result
+    except Exception as e:
+        logger.error(f"Error in privacy_assess_data_minimization: {str(e)}")
+        return {"error": str(e)}
+
+
+@mcp.tool()
+async def privacy_evaluate_consent_compliance(
+    consent_text: str,
+    data_practices: dict,
+    compliance_standards: list[str] = None,
+    judge_model: str = "gpt-4o-mini",
+) -> dict[str, Any]:
+    """Assess consent mechanisms and compliance with privacy regulations."""
+    try:
+        result = await PRIVACY_TOOLS.evaluate_consent_compliance(
+            consent_text=consent_text,
+            data_practices=data_practices,
+            compliance_standards=compliance_standards,
+            judge_model=judge_model,
+        )
+        return result
+    except Exception as e:
+        logger.error(f"Error in privacy_evaluate_consent_compliance: {str(e)}")
+        return {"error": str(e)}
+
+
+@mcp.tool()
+async def privacy_measure_anonymization_effectiveness(
+    original_data: str,
+    anonymized_data: str,
+    anonymization_method: str = "unknown",
+    reidentification_risk_threshold: float = 0.1,
+    judge_model: str = "gpt-4o-mini",
+) -> dict[str, Any]:
+    """Evaluate effectiveness of data anonymization techniques."""
+    try:
+        result = await PRIVACY_TOOLS.measure_anonymization_effectiveness(
+            original_data=original_data,
+            anonymized_data=anonymized_data,
+            anonymization_method=anonymization_method,
+            reidentification_risk_threshold=reidentification_risk_threshold,
+            judge_model=judge_model,
+        )
+        return result
+    except Exception as e:
+        logger.error(f"Error in privacy_measure_anonymization_effectiveness: {str(e)}")
+        return {"error": str(e)}
+
+
+# =========================
+# Workflow Tools Endpoints
+# =========================
+
+@mcp.tool()
+async def workflow_create_evaluation_suite(
+    suite_name: str,
+    evaluation_steps: list,
+    success_thresholds: dict,
+    weights: dict = None,
+    description: str = None,
+) -> dict:
+    """Define a comprehensive evaluation pipeline (suite)."""
+    try:
+        result = await WORKFLOW_TOOLS.create_evaluation_suite(
+            suite_name=suite_name,
+            evaluation_steps=evaluation_steps,
+            success_thresholds=success_thresholds,
+            weights=weights,
+            description=description,
+        )
+        return result
+    except Exception as e:
+        logger.error(f"Error in workflow_create_evaluation_suite: {str(e)}")
+        return {"error": str(e)}
+
+@mcp.tool()
+async def workflow_run_evaluation(
+    suite_id: str,
+    test_data: dict,
+    parallel_execution: bool = True,
+    save_results: bool = True,
+    max_concurrent: int = 3,
+) -> dict:
+    """Execute an evaluation suite on test data."""
+    try:
+        result = await WORKFLOW_TOOLS.run_evaluation(
+            suite_id=suite_id,
+            test_data=test_data,
+            parallel_execution=parallel_execution,
+            save_results=save_results,
+            max_concurrent=max_concurrent,
+        )
+        return result
+    except Exception as e:
+        logger.error(f"Error in workflow_run_evaluation: {str(e)}")
+        return {"error": str(e)}
+
+@mcp.tool()
+async def workflow_compare_evaluations(
+    evaluation_ids: list,
+    comparison_type: str = "improvement",
+    significance_test: bool = True,
+) -> dict:
+    """Compare results across multiple evaluation runs."""
+    try:
+        result = await WORKFLOW_TOOLS.compare_evaluations(
+            evaluation_ids=evaluation_ids,
+            comparison_type=comparison_type,
+            significance_test=significance_test,
+        )
+        return result
+    except Exception as e:
+        logger.error(f"Error in workflow_compare_evaluations: {str(e)}")
+        return {"error": str(e)}
+
+@mcp.tool()
+async def workflow_get_evaluation_suite(suite_id: str) -> dict:
+    """Get evaluation suite configuration by suite_id."""
+    try:
+        result = WORKFLOW_TOOLS.get_evaluation_suite(suite_id)
+        return result if result is not None else {"error": "Suite not found"}
+    except Exception as e:
+        logger.error(f"Error in workflow_get_evaluation_suite: {str(e)}")
+        return {"error": str(e)}
+
+@mcp.tool()
+async def workflow_get_evaluation_result(results_id: str) -> dict:
+    """Get evaluation results by results_id."""
+    try:
+        result = WORKFLOW_TOOLS.get_evaluation_result(results_id)
+        return result if result is not None else {"error": "Result not found"}
+    except Exception as e:
+        logger.error(f"Error in workflow_get_evaluation_result: {str(e)}")
+        return {"error": str(e)}
+
+@mcp.tool()
+async def workflow_list_evaluation_suites() -> list:
+    """List all evaluation suites."""
+    try:
+        result = WORKFLOW_TOOLS.list_evaluation_suites()
+        return result
+    except Exception as e:
+        logger.error(f"Error in workflow_list_evaluation_suites: {str(e)}")
+        return [{"error": str(e)}]
+
+@mcp.tool()
+async def workflow_list_evaluation_results() -> list:
+    """List all evaluation results."""
+    try:
+        result = WORKFLOW_TOOLS.list_evaluation_results()
+        return result
+    except Exception as e:
+        logger.error(f"Error in workflow_list_evaluation_results: {str(e)}")
+        return [{"error": str(e)}]
+
+
+# =========================
+# Calibration Tools Endpoints
+# =========================
+
+@mcp.tool()
+async def calibration_test_judge_agreement(
+    test_cases: list,
+    judge_models: list,
+    correlation_metric: str = "pearson",
+    human_labels: dict = None,
+) -> dict:
+    """Measure agreement between judges and humans."""
+    try:
+        result = await CALIBRATION_TOOLS.test_judge_agreement(
+            test_cases=test_cases,
+            judge_models=judge_models,
+            correlation_metric=correlation_metric,
+            human_labels=human_labels,
+        )
+        return result
+    except Exception as e:
+        logger.error(f"Error in calibration_test_judge_agreement: {str(e)}")
+        return {"error": str(e)}
+
+@mcp.tool()
+async def calibration_optimize_rubrics(
+    current_rubric: dict,
+    human_labels: dict,
+    optimization_target: str = "agreement",
+    iterations: int = 3,
+) -> dict:
+    """Tune evaluation rubrics for better alignment."""
+    try:
+        result = await CALIBRATION_TOOLS.optimize_rubrics(
+            current_rubric=current_rubric,
+            human_labels=human_labels,
+            optimization_target=optimization_target,
+            iterations=iterations,
+        )
+        return result
+    except Exception as e:
+        logger.error(f"Error in calibration_optimize_rubrics: {str(e)}")
+        return {"error": str(e)}
+
+
+# =========================
+# Utility Tools Endpoints (none implemented)
+# =========================
+# No callable utility tools found in utils/__init__.py
 
 
 def main():
